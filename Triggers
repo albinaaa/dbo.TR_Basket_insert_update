@@ -1,0 +1,52 @@
+IF OBJECT_ID('dbo.TR_Basket_insert_update', 'tr') IS NOT NULL
+DROP trigger dbo.TR_Basket_insert_update;
+GO
+
+CREATE TRIGGER dbo.TR_Basket_insert_update
+ON dbo.Basket
+instead of insert
+AS
+begin
+
+  create table #temp (id_sku int);
+
+  if exists(select id_sku, count(id_sku) from dbo.Basket group by (id_sku) having count(id_sku)>1)
+    begin
+      insert into #temp
+        SELECT id_sku
+        FROM inserted
+        group by (id_sku) having count(id_sku)>1;
+
+      INSERT INTO dbo.Basket (id_sku, quantity, value, purchasedate, DiscountValue, id_family)
+        SELECT id_sku, quantity, value, purchasedate, value*0.05, id_family
+        FROM inserted
+        where id_sku=(select id_sku from #temp);
+
+      delete from #temp;
+
+      if exists(select id_sku, count(id_sku) from dbo.Basket group by (id_sku) having count(id_sku)<2)
+        begin
+          insert into #temp
+            SELECT id_sku
+            FROM inserted
+            group by (id_sku) having count(id_sku)<2;
+
+          INSERT INTO dbo.Basket (id_sku, quantity, value, purchasedate, DiscountValue, id_family)
+            SELECT id_sku, quantity, value, purchasedate, 0, id_family
+            FROM inserted
+            where id_sku=(select id_sku from #temp);
+
+          delete from #temp;
+        end;
+    end;
+
+    else
+      begin
+        INSERT INTO dbo.Basket (id_sku, quantity, value, purchasedate, DiscountValue, id_family)
+          SELECT id_sku, quantity, value, purchasedate, 0, id_family
+          FROM inserted;
+      end;
+  drop table #temp;
+end;
+
+GO
